@@ -1,130 +1,118 @@
 from flask import Flask, request, jsonify
-from flask_cors import CORS
 import json
 import os
 
-app = Flask(__name__)
+from flask import Flask, request, jsonify
+from flask_cors import CORS
 
-# CORS totalmente abierto (para cualquier red, dispositivo, app móvil, render, etc.)
-CORS(app, resources={r"/*": {"origins": "*"}})
+app = Flask(name)
+CORS(app)  # esto habilita CORS para todos los orÃ­genes
 
-# ============================================
-# CONFIGURACIÓN
-# ============================================
+Archivo donde el proxy guarda el inventario en uso
+
 INVENTARIO_FILE = "inventarios_recibidos.json"
+
+Ruta del JSON real de tu matriz
+
 JSON_MATRIZ = r"C:\Users\infob\Desktop\inventarios\agencias\matriz\inventario_render.json"
 
-# TOKEN SECRETO PARA PROTEGER EL PROXY
-TOKEN = "JQM2025TOKEN"  # ← Cámbialo cuando quieras
+----------------------------------------
 
+FUNCIONES DE UTILIDAD
 
-# ============================================
-# FUNCIONES UTILIDAD
-# ============================================
+----------------------------------------
+
 def cargar_inventario():
-    if not os.path.exists(INVENTARIO_FILE):
-        return []
-    try:
-        with open(INVENTARIO_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except:
-        return []
-
+if not os.path.exists(INVENTARIO_FILE):
+return []
+try:
+with open(INVENTARIO_FILE, "r", encoding="utf-8") as f:
+return json.load(f)
+except:
+return []
 
 def guardar_inventario(data):
-    with open(INVENTARIO_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)
+with open(INVENTARIO_FILE, "w", encoding="utf-8") as f:
+json.dump(data, f, ensure_ascii=False, indent=4)
 
+----------------------------------------
 
-# ============================================
-# MIDDLEWARE DE SEGURIDAD
-# ============================================
-@app.before_request
-def validar_token():
-    if request.path == "/":  
-        return  # home no necesita token
+RUTAS DEL PROXY
 
-    token_recibido = request.headers.get("Token")
+----------------------------------------
 
-    if token_recibido != TOKEN:
-        return jsonify({"error": "Token inválido o no enviado"}), 401
-
-
-# ============================================
-# RUTAS DEL PROXY
-# ============================================
 @app.route("/")
 def home():
-    return "Proxy JQ Motors en Producción | Activo y Seguro."
-
+return "Servidor PROXI JQ Motors activo."
 
 @app.route("/inventario", methods=["POST"])
 def recibir_inventario():
-    data = request.get_json()
+data = request.get_json()
+agencia = data.get("agencia")
+inventario = data.get("inventario", [])
 
-    agencia = data.get("agencia")
-    inventario = data.get("inventario", [])
+# Normalizar inventario: solo cÃ³digo, descripciÃ³n, stock y agencia  
+inventario_final = []  
+for item in inventario:  
+    inventario_final.append({  
+        "codigo": item.get("codigo", ""),  
+        "descripcion": item.get("descripcion", ""),  
+        "stock": item.get("stock", 0),  
+        "agencia": agencia  
+    })  
 
-    if not agencia:
-        return jsonify({"error": "Debes enviar el nombre de la agencia"}), 400
-
-    inventario_final = []
-    for item in inventario:
-        inventario_final.append({
-            "codigo": item.get("codigo", "").upper(),
-            "descripcion": item.get("descripcion", ""),
-            "stock": int(item.get("stock", 0)),
-            "agencia": agencia
-        })
-
-    guardar_inventario(inventario_final)
-    return jsonify({"status": "inventario_actualizado", "agencia": agencia})
-
+guardar_inventario(inventario_final)  
+return jsonify({"status": "actualizado"})
 
 @app.route("/inventario-json", methods=["GET"])
 def obtener_inventario():
-    return jsonify(cargar_inventario())
-
+contenido = cargar_inventario()
+return jsonify(contenido)
 
 @app.route("/limpiar", methods=["POST"])
 def limpiar_inventario():
-    guardar_inventario([])
-    return jsonify({"status": "inventario_limpiado"})
+guardar_inventario([])
+return jsonify({"status": "inventario_limpiado"})
 
+----------------------------------------
 
-# ============================================
-# ACTUALIZAR DESDE MATRIZ
-# ============================================
+FUNCION PARA ACTUALIZAR DESDE MATRIZ
+
+----------------------------------------
+
 def actualizar_inventario_matriz():
-    if not os.path.exists(JSON_MATRIZ):
-        print("ERROR: No se encontró inventario_render.json de matriz")
-        return
-
-    with open(JSON_MATRIZ, "r", encoding="utf-8") as f:
-        inventario_real = json.load(f)
-
-    inventario_final = []
-    for item in inventario_real:
-        inventario_final.append({
-            "codigo": item.get("codigo", "").upper(),
-            "descripcion": item.get("descripcion", ""),
-            "stock": int(item.get("stock", 0)),
-            "agencia": "matriz"
-        })
-
-    guardar_inventario(inventario_final)
-    print("✔ Inventario de matriz actualizado")
-
+if not os.path.exists(JSON_MATRIZ):
+print("âŒ inventario_render.json de matriz no encontrado")
+return
+try:
+with open(JSON_MATRIZ, "r", encoding="utf-8") as f:
+inventario_real = json.load(f)
+# Normalizar inventario real al guardar
+inventario_final = []
+for item in inventario_real:
+inventario_final.append({
+"codigo": item.get("codigo", ""),
+"descripcion": item.get("descripcion", ""),
+"stock": item.get("stock", 0),
+"agencia": "matriz"  # asigna la agencia de la matriz
+})
+guardar_inventario(inventario_final)
+print("âœ… Inventario de matriz actualizado en el proxy.")
+except Exception as e:
+print("âŒ Error actualizando inventario de matriz:", e)
 
 @app.route("/actualizar-matriz", methods=["POST"])
 def actualizar_desde_matriz():
-    actualizar_inventario_matriz()
-    return jsonify({"status": "matriz_actualizada"})
+actualizar_inventario_matriz()
+return jsonify({"status": "actualizado"})
 
+----------------------------------------
 
-# ============================================
-# EJECUCIÓN PRODUCCIÓN
-# ============================================
-if __name__ == "__main__":
-    print("🔥 Proxy JQ Motors Producción listo.")
-    app.run(host="0.0.0.0", port=5002)
+EJECUCIÃ“N LOCAL
+
+----------------------------------------
+
+if name == "main":
+print("ðŸ”„ Proxy iniciado. Usando el Ãºltimo inventario guardado.")
+app.run(host="0.0.0.0", port=5002)
+Que este próxi pueda ser leído desde cualquier red o puerto
