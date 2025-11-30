@@ -1,151 +1,130 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="UTF-8">
-<title>Inventarios JQ Motors - theNET</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<style>
-body { font-family: Arial, sans-serif; margin:0; padding:20px; background:#f4f6fa; text-align:center; }
-h2 { margin-bottom:20px; }
-input, select, button { width:90%; max-width:400px; padding:12px; font-size:18px; margin-bottom:10px; border-radius:6px; border:1px solid #ccc; }
-table { width:95%; max-width:900px; margin:auto; border-collapse:collapse; background:white; border-radius:10px; overflow:hidden; box-shadow:0 2px 5px rgba(0,0,0,0.1); }
-th { background:#0044cc; color:white; padding:10px; text-transform:uppercase; }
-td { padding:10px; border-bottom:1px solid #ddd; text-align:center; }
-tr:nth-child(even){background:#f2f2f2;}
-#mensaje { color:red; margin-bottom:20px; font-weight:bold; }
-button { cursor:pointer; background:#0044cc; color:white; border:none; }
-button:hover { background:#003399; }
-</style>
-</head>
-<body>
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+import json
+import os
 
-<h2>Inventarios JQ Motors - ofNET</h2>
-<div id="mensaje">Selecciona una opción o ingresa un código para buscar</div>
+app = Flask(__name__)
 
-<input type="text" id="busqueda" placeholder="Ingresa el código para buscar..." onkeyup="filtrar()">
+# CORS totalmente abierto (para cualquier red, dispositivo, app móvil, render, etc.)
+CORS(app, resources={r"/*": {"origins": "*"}})
 
-<div>
-    <select id="selectAgencia">
-        <option value="">--Selecciona agencia--</option>
-    </select>
-    <button onclick="filtrarAgencia()">Ver inventario de la agencia</button>
-    <button onclick="exportarInventario()">Exportar inventario completo</button>
-</div>
+# ============================================
+# CONFIGURACIÓN
+# ============================================
+INVENTARIO_FILE = "inventarios_recibidos.json"
+JSON_MATRIZ = r"C:\Users\infob\Desktop\inventarios\agencias\matriz\inventario_render.json"
 
-<table>
-<thead>
-<tr>
-    <th>Agencia</th>
-    <th>Código</th>
-    <th>Descripción</th>
-    <th>Stock</th>
-</tr>
-</thead>
-<tbody id="resultados"></tbody>
-</table>
+# TOKEN SECRETO PARA PROTEGER EL PROXY
+TOKEN = "JQM2025TOKEN"  # ← Cámbialo cuando quieras
 
-<script>
-let inventario = [];
 
-// Convertir cualquier valor a string seguro
-function valorStr(v) { return v != null ? v.toString() : ""; }
+# ============================================
+# FUNCIONES UTILIDAD
+# ============================================
+def cargar_inventario():
+    if not os.path.exists(INVENTARIO_FILE):
+        return []
+    try:
+        with open(INVENTARIO_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except:
+        return []
 
-// Mostrar mensaje
-function mostrarMensaje(texto) { document.getElementById("mensaje").textContent = texto; }
 
-// URL del proxy
-const SERVER_URL = "https://proxi-jqmotors.onrender.com/inventario-json";
+def guardar_inventario(data):
+    with open(INVENTARIO_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=4)
 
-// Cargar inventario desde proxy, pero **no mostrarlo hasta seleccionar**
-async function cargarInventario() {
-    mostrarMensaje("Cargando inventario desde Render...");
-    try {
-        const res = await fetch(SERVER_URL);
-        if (!res.ok) throw new Error("Error en la respuesta del servidor");
-        inventario = await res.json();
-        mostrarMensaje("Selecciona una opción o ingresa un código para buscar");
-        poblarAgencias();
-    } catch(err) {
-        console.error(err);
-        mostrarMensaje("❌ No se pudo conectar con el servidor. Asegúrate de que el proxy en Render esté activo.");
-    }
-}
 
-// Poblar select de agencias
-function poblarAgencias() {
-    const select = document.getElementById("selectAgencia");
-    const agencias = [...new Set(inventario.map(i => valorStr(i.agencia)))].sort();
-    agencias.forEach(a => {
-        const option = document.createElement("option");
-        option.value = a;
-        option.textContent = a;
-        select.appendChild(option);
-    });
-}
+# ============================================
+# MIDDLEWARE DE SEGURIDAD
+# ============================================
+@app.before_request
+def validar_token():
+    if request.path == "/":  
+        return  # home no necesita token
 
-// Filtrar por código
-function filtrar() {
-    const filtro = document.getElementById("busqueda").value.toLowerCase().trim();
-    if(filtro === "") {
-        document.getElementById("resultados").innerHTML = "";
-        mostrarMensaje("Selecciona una opción o ingresa un código para buscar");
-        return;
-    }
-    const filtrados = inventario.filter(item =>
-        valorStr(item.codigo).toLowerCase() === filtro ||
-        valorStr(item.descripcion).toLowerCase().includes(filtro)
-    );
-    mostrarResultados(filtrados);
-}
+    token_recibido = request.headers.get("Token")
 
-// Filtrar por agencia desde el botón
-function filtrarAgencia() {
-    const agencia = document.getElementById("selectAgencia").value;
-    if(!agencia) { mostrarMensaje("❌ Selecciona una agencia"); return; }
-    const filtrados = inventario.filter(item => valorStr(item.agencia) === agencia);
-    mostrarResultados(filtrados);
-    mostrarMensaje("");
-}
+    if token_recibido != TOKEN:
+        return jsonify({"error": "Token inválido o no enviado"}), 401
 
-// Mostrar resultados en tabla
-function mostrarResultados(datos) {
-    const tbody = document.getElementById("resultados");
-    tbody.innerHTML = "";
-    if(!datos.length) {
-        tbody.innerHTML = "<tr><td colspan='4'>No se encontraron resultados</td></tr>";
-        return;
-    }
-    datos.forEach(item => {
-        tbody.innerHTML += `
-            <tr>
-                <td>${valorStr(item.agencia)}</td>
-                <td>${valorStr(item.codigo)}</td>
-                <td>${valorStr(item.descripcion)}</td>
-                <td>${valorStr(item.stock)}</td>
-            </tr>
-        `;
-    });
-}
 
-// Exportar inventario completo como CSV
-function exportarInventario() {
-    if(!inventario.length) { mostrarMensaje("❌ Inventario vacío"); return; }
-    let csv = "Agencia,Código,Descripción,Stock\n";
-    inventario.forEach(item => {
-        csv += `"${valorStr(item.agencia)}","${valorStr(item.codigo)}","${valorStr(item.descripcion)}","${valorStr(item.stock)}"\n`;
-    });
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "inventario_matriz.csv";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-}
+# ============================================
+# RUTAS DEL PROXY
+# ============================================
+@app.route("/")
+def home():
+    return "Proxy JQ Motors en Producción | Activo y Seguro."
 
-// Inicializar
-cargarInventario();
-</script>
-</body>
-</html>
+
+@app.route("/inventario", methods=["POST"])
+def recibir_inventario():
+    data = request.get_json()
+
+    agencia = data.get("agencia")
+    inventario = data.get("inventario", [])
+
+    if not agencia:
+        return jsonify({"error": "Debes enviar el nombre de la agencia"}), 400
+
+    inventario_final = []
+    for item in inventario:
+        inventario_final.append({
+            "codigo": item.get("codigo", "").upper(),
+            "descripcion": item.get("descripcion", ""),
+            "stock": int(item.get("stock", 0)),
+            "agencia": agencia
+        })
+
+    guardar_inventario(inventario_final)
+    return jsonify({"status": "inventario_actualizado", "agencia": agencia})
+
+
+@app.route("/inventario-json", methods=["GET"])
+def obtener_inventario():
+    return jsonify(cargar_inventario())
+
+
+@app.route("/limpiar", methods=["POST"])
+def limpiar_inventario():
+    guardar_inventario([])
+    return jsonify({"status": "inventario_limpiado"})
+
+
+# ============================================
+# ACTUALIZAR DESDE MATRIZ
+# ============================================
+def actualizar_inventario_matriz():
+    if not os.path.exists(JSON_MATRIZ):
+        print("ERROR: No se encontró inventario_render.json de matriz")
+        return
+
+    with open(JSON_MATRIZ, "r", encoding="utf-8") as f:
+        inventario_real = json.load(f)
+
+    inventario_final = []
+    for item in inventario_real:
+        inventario_final.append({
+            "codigo": item.get("codigo", "").upper(),
+            "descripcion": item.get("descripcion", ""),
+            "stock": int(item.get("stock", 0)),
+            "agencia": "matriz"
+        })
+
+    guardar_inventario(inventario_final)
+    print("✔ Inventario de matriz actualizado")
+
+
+@app.route("/actualizar-matriz", methods=["POST"])
+def actualizar_desde_matriz():
+    actualizar_inventario_matriz()
+    return jsonify({"status": "matriz_actualizada"})
+
+
+# ============================================
+# EJECUCIÓN PRODUCCIÓN
+# ============================================
+if __name__ == "__main__":
+    print("🔥 Proxy JQ Motors Producción listo.")
+    app.run(host="0.0.0.0", port=5002)
