@@ -20,20 +20,29 @@
         font-size:22px;
         font-weight:bold;
     }
-    .buscador{
-        padding:15px;
+    .top-bar{
         background:white;
+        padding:10px;
         box-shadow:0 0 5px rgba(0,0,0,0.2);
         position:sticky;
         top:0;
         z-index:100;
+        display:flex;
+        flex-direction:column;
+        gap:10px;
     }
-    input{
+    input, select, button{
         width:100%;
         padding:12px;
         font-size:16px;
         border:1px solid #ccc;
         border-radius:8px;
+    }
+    button{
+        background:#111;
+        color:white;
+        font-weight:bold;
+        cursor:pointer;
     }
     .tabla{
         width:100%;
@@ -49,15 +58,25 @@
         background:#444;
         color:white;
         position:sticky;
-        top:65px;
+        top:180px;
         z-index:50;
     }
-    .agencia{
+    .agencia-titulo{
         background:#222;
         color:white;
         padding:10px;
         font-weight:bold;
         margin-top:20px;
+        font-size:18px;
+    }
+    #iaResultado{
+        background:#fff;
+        padding:10px;
+        border-radius:10px;
+        box-shadow:0 0 5px rgba(0,0,0,0.2);
+        margin-top:15px;
+        display:none;
+        white-space:pre-wrap;
     }
 </style>
 
@@ -66,73 +85,137 @@
 
 <header>Inventario General JQ Motors</header>
 
-<div class="buscador">
+<div class="top-bar">
     <input type="text" id="buscar" placeholder="Buscar código o descripción...">
+    <button onclick="buscarIA()">🔍 Buscar con Inteligencia Artificial</button>
+    <select id="filtroAgencia">
+        <option value="todas">🔄 Todas las agencias</option>
+    </select>
 </div>
 
+<div id="iaResultado"></div>
 <div id="contenido"></div>
 
 <script>
-const PROXY_URL = "https://TU_PROYECTO_RENDER.onrender.com/proxy"; 
-// Reemplaza TU_PROYECTO_RENDER con el nombre real
+// URL del PROXY
+const PROXY_URL = "https://proxi-multitienda.onrender.com";
+
+let inventariosGlobal = [];
 
 async function cargarInventarios(){
-    try{
-        const resp = await fetch(PROXY_URL);
-        const data = await resp.json();
+    const resp = await fetch(PROXY_URL + "/inventarios/todas");
+    const data = await resp.json();
+    inventariosGlobal = data;
 
-        const cont = document.getElementById("contenido");
-        cont.innerHTML = "";
-
-        // Agencias ordenadas
-        const agencias = Object.keys(data).sort();
-
-        agencias.forEach(ag => {
-            const inv = data[ag];
-
-            let html = `
-                <div class="agencia">${ag}</div>
-                <table class="tabla">
-                    <tr>
-                        <th>Código</th>
-                        <th>Descripción</th>
-                        <th>Existencia</th>
-                    </tr>
-            `;
-
-            inv.forEach(pieza => {
-                html += `
-                    <tr class="fila">
-                        <td class="codigo">${pieza.codigo}</td>
-                        <td class="descripcion">${pieza.descripcion}</td>
-                        <td>${pieza.cantidad}</td>
-                    </tr>
-                `;
-            });
-
-            html += "</table>";
-            cont.innerHTML += html;
-        });
-
-    } catch(e){
-        alert("Error cargando inventarios: " + e);
-    }
+    cargarAgenciasSelector(data);
+    mostrarInventarios();
 }
 
-document.getElementById("buscar").addEventListener("keyup", function(){
-    let filtro = this.value.toLowerCase();
+function cargarAgenciasSelector(data){
+    const select = document.getElementById("filtroAgencia");
+    const agencias = [...new Set(data.map(x => x.agencia))].sort();
+
+    agencias.forEach(a => {
+        let op = document.createElement("option");
+        op.value = a;
+        op.textContent = "🏍️ " + a.toUpperCase();
+        select.appendChild(op);
+    });
+}
+
+function mostrarInventarios(){
+    const cont = document.getElementById("contenido");
+    cont.innerHTML = "";
+
+    const filtroAgencia = document.getElementById("filtroAgencia").value;
+
+    let datosFiltrados = inventariosGlobal;
+    if(filtroAgencia !== "todas"){
+        datosFiltrados = inventariosGlobal.filter(x => x.agencia === filtroAgencia);
+    }
+
+    const grupos = {};
+    datosFiltrados.forEach(item => {
+        const ag = item.agencia || "sin agencia";
+        if(!grupos[ag]) grupos[ag] = [];
+        grupos[ag].push(item);
+    });
+
+    Object.keys(grupos).sort().forEach(ag => {
+        const inv = grupos[ag];
+
+        let html = `
+            <div class="agencia-titulo">${ag.toUpperCase()}</div>
+            <table class="tabla">
+                <tr>
+                    <th>Código</th>
+                    <th>Descripción</th>
+                    <th>Stock</th>
+                </tr>
+        `;
+
+        inv.forEach(pieza => {
+            html += `
+                <tr class="fila">
+                    <td class="codigo">${pieza.codigo}</td>
+                    <td class="descripcion">${pieza.descripcion}</td>
+                    <td>${pieza.stock}</td>
+                </tr>
+            `;
+        });
+
+        html += "</table>";
+
+        cont.innerHTML += html;
+    });
+
+    aplicarFiltroTexto();
+}
+
+document.getElementById("buscar").addEventListener("keyup", aplicarFiltroTexto);
+document.getElementById("filtroAgencia").addEventListener("change", mostrarInventarios);
+
+function aplicarFiltroTexto(){
+    let filtro = document.getElementById("buscar").value.toLowerCase();
 
     document.querySelectorAll(".fila").forEach(fila => {
         let codigo = fila.querySelector(".codigo").innerText.toLowerCase();
         let desc = fila.querySelector(".descripcion").innerText.toLowerCase();
 
-        if(codigo.includes(filtro) || desc.includes(filtro)){
-            fila.style.display = "";
-        } else {
-            fila.style.display = "none";
-        }
+        fila.style.display = (codigo.includes(filtro) || desc.includes(filtro)) ? "" : "none";
     });
-});
+}
+
+async function buscarIA(){
+    let texto = document.getElementById("buscar").value.trim();
+    if(texto.length < 3){
+        alert("Escribe más detalles para buscar con IA.");
+        return;
+    }
+
+    const resBox = document.getElementById("iaResultado");
+    resBox.style.display = "block";
+    resBox.textContent = "⏳ Consultando IA...";
+
+    try{
+        const resp = await fetch(PROXY_URL + "/ia/buscar", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({texto})
+        });
+
+        const data = await resp.json();
+
+        if(data.ia){
+            resBox.textContent = data.ia;
+        } else {
+            resBox.textContent = "❌ Error: " + JSON.stringify(data);
+        }
+
+    } catch(e){
+        resBox.textContent = "❌ Error: " + e;
+    }
+}
 
 cargarInventarios();
 </script>
