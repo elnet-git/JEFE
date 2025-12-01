@@ -1,118 +1,141 @@
-from flask import Flask, request, jsonify
-import json
-import os
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Inventario General | JQ Motors</title>
 
-from flask import Flask, request, jsonify
-from flask_cors import CORS
+<style>
+    body{
+        font-family: Arial, sans-serif;
+        background: #f2f2f2;
+        margin:0;
+        padding:0;
+    }
+    header{
+        background:#111;
+        color:white;
+        padding:15px;
+        text-align:center;
+        font-size:22px;
+        font-weight:bold;
+    }
+    .buscador{
+        padding:15px;
+        background:white;
+        box-shadow:0 0 5px rgba(0,0,0,0.2);
+        position:sticky;
+        top:0;
+        z-index:100;
+    }
+    input{
+        width:100%;
+        padding:12px;
+        font-size:16px;
+        border:1px solid #ccc;
+        border-radius:8px;
+    }
+    .tabla{
+        width:100%;
+        border-collapse:collapse;
+        margin-top:10px;
+    }
+    th, td{
+        padding:10px;
+        border-bottom:1px solid #ddd;
+        text-align:left;
+    }
+    th{
+        background:#444;
+        color:white;
+        position:sticky;
+        top:65px;
+        z-index:50;
+    }
+    .agencia{
+        background:#222;
+        color:white;
+        padding:10px;
+        font-weight:bold;
+        margin-top:20px;
+    }
+</style>
 
-app = Flask(name)
-CORS(app)  # esto habilita CORS para todos los orÃ­genes
+</head>
+<body>
 
-Archivo donde el proxy guarda el inventario en uso
+<header>Inventario General JQ Motors</header>
 
-INVENTARIO_FILE = "inventarios_recibidos.json"
+<div class="buscador">
+    <input type="text" id="buscar" placeholder="Buscar código o descripción...">
+</div>
 
-Ruta del JSON real de tu matriz
+<div id="contenido"></div>
 
-JSON_MATRIZ = r"C:\Users\infob\Desktop\inventarios\agencias\matriz\inventario_render.json"
+<script>
+const PROXY_URL = "https://TU_PROYECTO_RENDER.onrender.com/proxy"; 
+// Reemplaza TU_PROYECTO_RENDER con el nombre real
 
-----------------------------------------
+async function cargarInventarios(){
+    try{
+        const resp = await fetch(PROXY_URL);
+        const data = await resp.json();
 
-FUNCIONES DE UTILIDAD
+        const cont = document.getElementById("contenido");
+        cont.innerHTML = "";
 
-----------------------------------------
+        // Agencias ordenadas
+        const agencias = Object.keys(data).sort();
 
-def cargar_inventario():
-if not os.path.exists(INVENTARIO_FILE):
-return []
-try:
-with open(INVENTARIO_FILE, "r", encoding="utf-8") as f:
-return json.load(f)
-except:
-return []
+        agencias.forEach(ag => {
+            const inv = data[ag];
 
-def guardar_inventario(data):
-with open(INVENTARIO_FILE, "w", encoding="utf-8") as f:
-json.dump(data, f, ensure_ascii=False, indent=4)
+            let html = `
+                <div class="agencia">${ag}</div>
+                <table class="tabla">
+                    <tr>
+                        <th>Código</th>
+                        <th>Descripción</th>
+                        <th>Existencia</th>
+                    </tr>
+            `;
 
-----------------------------------------
+            inv.forEach(pieza => {
+                html += `
+                    <tr class="fila">
+                        <td class="codigo">${pieza.codigo}</td>
+                        <td class="descripcion">${pieza.descripcion}</td>
+                        <td>${pieza.cantidad}</td>
+                    </tr>
+                `;
+            });
 
-RUTAS DEL PROXY
+            html += "</table>";
+            cont.innerHTML += html;
+        });
 
-----------------------------------------
+    } catch(e){
+        alert("Error cargando inventarios: " + e);
+    }
+}
 
-@app.route("/")
-def home():
-return "Servidor PROXI JQ Motors activo."
+document.getElementById("buscar").addEventListener("keyup", function(){
+    let filtro = this.value.toLowerCase();
 
-@app.route("/inventario", methods=["POST"])
-def recibir_inventario():
-data = request.get_json()
-agencia = data.get("agencia")
-inventario = data.get("inventario", [])
+    document.querySelectorAll(".fila").forEach(fila => {
+        let codigo = fila.querySelector(".codigo").innerText.toLowerCase();
+        let desc = fila.querySelector(".descripcion").innerText.toLowerCase();
 
-# Normalizar inventario: solo cÃ³digo, descripciÃ³n, stock y agencia  
-inventario_final = []  
-for item in inventario:  
-    inventario_final.append({  
-        "codigo": item.get("codigo", ""),  
-        "descripcion": item.get("descripcion", ""),  
-        "stock": item.get("stock", 0),  
-        "agencia": agencia  
-    })  
+        if(codigo.includes(filtro) || desc.includes(filtro)){
+            fila.style.display = "";
+        } else {
+            fila.style.display = "none";
+        }
+    });
+});
 
-guardar_inventario(inventario_final)  
-return jsonify({"status": "actualizado"})
+cargarInventarios();
+</script>
 
-@app.route("/inventario-json", methods=["GET"])
-def obtener_inventario():
-contenido = cargar_inventario()
-return jsonify(contenido)
-
-@app.route("/limpiar", methods=["POST"])
-def limpiar_inventario():
-guardar_inventario([])
-return jsonify({"status": "inventario_limpiado"})
-
-----------------------------------------
-
-FUNCION PARA ACTUALIZAR DESDE MATRIZ
-
-----------------------------------------
-
-def actualizar_inventario_matriz():
-if not os.path.exists(JSON_MATRIZ):
-print("âŒ inventario_render.json de matriz no encontrado")
-return
-try:
-with open(JSON_MATRIZ, "r", encoding="utf-8") as f:
-inventario_real = json.load(f)
-# Normalizar inventario real al guardar
-inventario_final = []
-for item in inventario_real:
-inventario_final.append({
-"codigo": item.get("codigo", ""),
-"descripcion": item.get("descripcion", ""),
-"stock": item.get("stock", 0),
-"agencia": "matriz"  # asigna la agencia de la matriz
-})
-guardar_inventario(inventario_final)
-print("âœ… Inventario de matriz actualizado en el proxy.")
-except Exception as e:
-print("âŒ Error actualizando inventario de matriz:", e)
-
-@app.route("/actualizar-matriz", methods=["POST"])
-def actualizar_desde_matriz():
-actualizar_inventario_matriz()
-return jsonify({"status": "actualizado"})
-
-----------------------------------------
-
-EJECUCIÃ“N LOCAL
-
-----------------------------------------
-
-if name == "main":
-print("ðŸ”„ Proxy iniciado. Usando el Ãºltimo inventario guardado.")
-app.run(host="0.0.0.0", port=5002)
-
+</body>
+</html>
