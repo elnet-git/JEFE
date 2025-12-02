@@ -2,150 +2,205 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>Inventarios JQ Motors - theNET</title>
+<title>Inventarios JQ Motors - Unificado</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-body { font-family: Arial, sans-serif; margin:0; padding:20px; background:#f4f6fa; text-align:center; }
-h2 { margin-bottom:20px; }
-input, select, button { width:90%; max-width:400px; padding:12px; font-size:18px; margin-bottom:10px; border-radius:6px; border:1px solid #ccc; }
-table { width:95%; max-width:900px; margin:auto; border-collapse:collapse; background:white; border-radius:10px; overflow:hidden; box-shadow:0 2px 5px rgba(0,0,0,0.1); }
-th { background:#0044cc; color:white; padding:10px; text-transform:uppercase; }
-td { padding:10px; border-bottom:1px solid #ddd; text-align:center; }
-tr:nth-child(even){background:#f2f2f2;}
-#mensaje { color:red; margin-bottom:20px; font-weight:bold; }
-button { cursor:pointer; background:#0044cc; color:white; border:none; }
-button:hover { background:#003399; }
+:root{
+    --azul:#0044cc;
+    --azul-osc:#003399;
+    --bg:#f4f6fa;
+    --card:#ffffff;
+    --gris:#666;
+    --gris-claro:#eee;
+}
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    margin:0; padding:0; background:var(--bg); color:#111;
+}
+h2 {
+    margin:20px 0; color:var(--azul);
+    text-align:center; font-weight:700;
+}
+.container {
+    max-width:1200px; margin:0 auto; padding:20px;
+}
+
+/* Controles */
+.controls {
+    display:flex; flex-wrap:wrap; gap:10px;
+    justify-content:center; margin-bottom:20px;
+}
+.controls .wide { flex:1 1 300px; max-width:600px; }
+.controls input, .controls select, .controls button {
+    padding:10px; font-size:16px; border-radius:6px;
+    border:1px solid var(--gris-claro); box-sizing:border-box;
+}
+.controls input:focus, .controls select:focus { outline:none; border-color:var(--azul); }
+.controls button {
+    cursor:pointer; background:var(--azul); color:white;
+    border:none; font-weight:600; transition:0.3s;
+}
+.controls button:hover { background:var(--azul-osc); }
+
+/* Mensaje de estado */
+#mensaje {
+    text-align:center; font-weight:600; color:#b00; margin-bottom:16px;
+}
+
+/* Tabla */
+.scroll-box {
+    width: 100%; max-height: 550px; overflow-y:auto;
+    border-radius:10px; box-shadow:0 2px 8px rgba(0,0,0,0.12);
+    background:var(--card);
+}
+table {
+    width:100%; border-collapse:collapse;
+}
+thead th {
+    position:sticky; top:0; background:var(--azul); color:white;
+    padding:12px; font-size:13px; text-transform:uppercase; text-align:center;
+}
+tbody td {
+    padding:10px; font-size:14px; border-bottom:1px solid var(--gris-claro);
+    text-align:center;
+}
+tbody tr:nth-child(even){ background:#fbfbfb; }
+tbody tr:hover { background:#e8f0ff; }
+
+/* Responsive */
+@media(max-width:768px){
+    .controls { flex-direction:column; }
+}
 </style>
 </head>
 <body>
+<div class="container">
+    <h2>Inventarios JQ Motors - Unificado</h2>
+    <div id="mensaje">Cargando inventarios...</div>
 
-<h2>Inventarios JQ Motors - ofNET</h2>
-<div id="mensaje">Selecciona una opción o ingresa un código para buscar</div>
+    <div class="controls">
+        <input id="busqueda" class="wide" type="text" placeholder="Buscar código o descripción..." onkeyup="filtrarAutog()">
+        <select id="selectAgencia" style="max-width:250px;"></select>
+        <button onclick="filtrarAgencia()">Filtrar por Agencia</button>
+        <button onclick="exportarInventario()" style="max-width:180px;">Exportar CSV</button>
+    </div>
 
-<input type="text" id="busqueda" placeholder="Ingresa el código para buscar..." onkeyup="filtrar()">
-
-<div>
-    <select id="selectAgencia">
-        <option value="">--Selecciona agencia--</option>
-    </select>
-    <button onclick="filtrarAgencia()">Ver inventario de la agencia</button>
-    <button onclick="exportarInventario()">Exportar inventario completo</button>
+    <div class="scroll-box">
+        <table>
+            <thead>
+                <tr>
+                    <th>Agencia</th>
+                    <th>Código</th>
+                    <th>Descripción</th>
+                    <th>Stock</th>
+                </tr>
+            </thead>
+            <tbody id="resultados"></tbody>
+        </table>
+    </div>
 </div>
 
-<table>
-<thead>
-<tr>
-    <th>Agencia</th>
-    <th>Código</th>
-    <th>Descripción</th>
-    <th>Stock</th>
-</tr>
-</thead>
-<tbody id="resultados"></tbody>
-</table>
-
 <script>
-let inventario = [];
+/* ================= CONFIG ================= */
+const URLS = [
+    "https://proxi-matriz.onrender.com/inventario-json",
+    "https://proxi-impulsora.onrender.com/inventario-json",
+    "https://proxi-tultitlan.onrender.com/inventario-json",
+    "https://proxi-ojo_de_agua.onrender.com/inventario-json",
+    "https://proxi-pachuca.onrender.com/inventario-json",
+    "https://proxi-mixquiahuala.onrender.com/inventario-json"
+];
 
-// Convertir cualquier valor a string seguro
-function valorStr(v) { return v != null ? v.toString() : ""; }
+const PROXY_URL = "https://proxi-multitienda.onrender.com";
+let inventarioCombinado = [];
 
-// Mostrar mensaje
-function mostrarMensaje(texto) { document.getElementById("mensaje").textContent = texto; }
+/* ================= CARGA ================= */
+async function cargarInventarios(){
+    mostrarMensaje("Cargando inventarios...");
+    inventarioCombinado = [];
 
-// URL del proxy
-const SERVER_URL = "https://proxi-jqmotors.onrender.com/inventario-json";
+    /* Multitienda */
+    try{
+        const r = await fetch(PROXY_URL + "/inventario-json");
+        if(r.ok){ inventarioCombinado.push(...await r.json()); }
+    }catch(e){ console.warn("Multitienda no respondió."); }
 
-// Cargar inventario desde proxy, pero **no mostrarlo hasta seleccionar**
-async function cargarInventario() {
-    mostrarMensaje("Cargando inventario desde Render...");
-    try {
-        const res = await fetch(SERVER_URL);
-        if (!res.ok) throw new Error("Error en la respuesta del servidor");
-        inventario = await res.json();
-        mostrarMensaje("Selecciona una opción o ingresa un código para buscar");
-        poblarAgencias();
-    } catch(err) {
-        console.error(err);
-        mostrarMensaje("❌ No se pudo conectar con el servidor. Asegúrate de que el proxy en Render esté activo.");
+    /* Cada agencia individual */
+    for(const agencia of URLS){
+        try{
+            const r = await fetch(agencia);
+            if(r.ok){
+                const datos = await r.json();
+                inventarioCombinado.push(...datos.map(x=>({...x, agencia:x.agencia||agencia})));
+            }
+        }catch(e){ console.warn("No respondió:", agencia); }
     }
+
+    poblarSelectorAgencias();
+    mostrarResultados(inventarioCombinado);
+    mostrarMensaje("Inventarios cargados.");
 }
 
-// Poblar select de agencias
-function poblarAgencias() {
-    const select = document.getElementById("selectAgencia");
-    const agencias = [...new Set(inventario.map(i => valorStr(i.agencia)))].sort();
-    agencias.forEach(a => {
-        const option = document.createElement("option");
-        option.value = a;
-        option.textContent = a;
-        select.appendChild(option);
+/* ================= SELECTOR ================= */
+function poblarSelectorAgencias(){
+    const sel = document.getElementById("selectAgencia");
+    sel.innerHTML = '<option value="">-- Todas las agencias --</option>';
+    [...new Set(inventarioCombinado.map(x=>x.agencia))].sort().forEach(a=>{
+        const op = document.createElement("option");
+        op.value = a; op.textContent = a.toUpperCase();
+        sel.appendChild(op);
     });
 }
 
-// Filtrar por código
-function filtrar() {
-    const filtro = document.getElementById("busqueda").value.toLowerCase().trim();
-    if(filtro === "") {
-        document.getElementById("resultados").innerHTML = "";
-        mostrarMensaje("Selecciona una opción o ingresa un código para buscar");
-        return;
-    }
-    const filtrados = inventario.filter(item =>
-        valorStr(item.codigo).toLowerCase() === filtro ||
-        valorStr(item.descripcion).toLowerCase().includes(filtro)
-    );
-    mostrarResultados(filtrados);
-}
+/* ================= MOSTRAR ================= */
+function mostrarResultados(datos){
+    const tb = document.getElementById("resultados");
+    tb.innerHTML = "";
+    if(datos.length===0){ tb.innerHTML="<tr><td colspan='4'>No hay datos</td></tr>"; return; }
 
-// Filtrar por agencia desde el botón
-function filtrarAgencia() {
-    const agencia = document.getElementById("selectAgencia").value;
-    if(!agencia) { mostrarMensaje("❌ Selecciona una agencia"); return; }
-    const filtrados = inventario.filter(item => valorStr(item.agencia) === agencia);
-    mostrarResultados(filtrados);
-    mostrarMensaje("");
-}
+    datos.sort((a,b)=>{
+        if(a.agencia!==b.agencia) return a.agencia.localeCompare(b.agencia);
+        return (a.codigo||"").toString().localeCompare((b.codigo||"").toString());
+    });
 
-// Mostrar resultados en tabla
-function mostrarResultados(datos) {
-    const tbody = document.getElementById("resultados");
-    tbody.innerHTML = "";
-    if(!datos.length) {
-        tbody.innerHTML = "<tr><td colspan='4'>No se encontraron resultados</td></tr>";
-        return;
-    }
-    datos.forEach(item => {
-        tbody.innerHTML += `
-            <tr>
-                <td>${valorStr(item.agencia)}</td>
-                <td>${valorStr(item.codigo)}</td>
-                <td>${valorStr(item.descripcion)}</td>
-                <td>${valorStr(item.stock)}</td>
-            </tr>
-        `;
+    datos.forEach(item=>{
+        const tr=document.createElement("tr");
+        tr.innerHTML=`<td>${item.agencia}</td>
+                      <td>${item.codigo}</td>
+                      <td style="text-align:left">${item.descripcion}</td>
+                      <td>${item.stock}</td>`;
+        tb.appendChild(tr);
     });
 }
 
-// Exportar inventario completo como CSV
-function exportarInventario() {
-    if(!inventario.length) { mostrarMensaje("❌ Inventario vacío"); return; }
-    let csv = "Agencia,Código,Descripción,Stock\n";
-    inventario.forEach(item => {
-        csv += `"${valorStr(item.agencia)}","${valorStr(item.codigo)}","${valorStr(item.descripcion)}","${valorStr(item.stock)}"\n`;
-    });
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "inventario_matriz.csv";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+/* ================= FILTROS ================= */
+function filtrarAutog(){
+    const txt = document.getElementById("busqueda").value.toLowerCase();
+    mostrarResultados(inventarioCombinado.filter(x=>
+        x.codigo?.toLowerCase().includes(txt) ||
+        x.descripcion?.toLowerCase().includes(txt)
+    ));
 }
 
-// Inicializar
-cargarInventario();
+function filtrarAgencia(){
+    const a = document.getElementById("selectAgencia").value;
+    mostrarResultados(a ? inventarioCombinado.filter(x=>x.agencia===a) : inventarioCombinado);
+}
+
+/* ================= CSV ================= */
+function exportarInventario(){
+    let csv="Agencia,Código,Descripción,Stock\n";
+    inventarioCombinado.forEach(x=>{ csv+=`"${x.agencia}","${x.codigo}","${x.descripcion}","${x.stock}"\n`; });
+    const blob=new Blob([csv],{type:"text/csv"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a"); a.href=url; a.download="inventario_completo.csv"; a.click();
+}
+
+/* ================= UTIL ================= */
+function mostrarMensaje(t){ document.getElementById("mensaje").textContent=t; }
+
+/* INICIO */
+cargarInventarios();
 </script>
 </body>
 </html>
