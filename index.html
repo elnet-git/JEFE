@@ -78,7 +78,7 @@ tbody tr:hover { background:#e8f0ff; }
     <div id="mensaje">Cargando inventarios...</div>
 
     <div class="controls">
-        <input id="busqueda" class="wide" type="text" placeholder="Buscar código o descripción..." onkeyup="filtrarBusqueda()">
+        <input id="busqueda" class="wide" type="text" placeholder="Buscar código o descripción..." onkeyup="filtrarTodo()">
         <select id="selectAgencia" style="max-width:250px;"></select>
         <button onclick="filtrarAgencia()">Filtrar por Agencia</button>
         <button onclick="exportarInventario()" style="max-width:180px;">Exportar CSV</button>
@@ -102,12 +102,12 @@ tbody tr:hover { background:#e8f0ff; }
 <script>
 /* ================= URLs AGENCIAS ================= */
 const URLS = [
-    "https://proxi-matriz.onrender.com/inventario-json",
-    "https://proxi-impulsora.onrender.com/inventario-json",
-    "https://proxi-tultitlan.onrender.com/inventario-json",
-    "https://proxi-ojo_de_agua.onrender.com/inventario-json",
-    "https://proxi-pachuca.onrender.com/inventario-json",
-    "https://proxi-mixquiahuala.onrender.com/inventario-json"
+    "https://inv-matriz-server.onrender.com/inventario-json",
+    "https://inv-impulsora-server.onrender.com/inventario-json",
+    "https://inv-tultitlan-server.onrender.com/inventario-json",
+    "https://inv-ojo-de-agua-server.onrender.com/inventario-json",
+    "https://inv-pachuca-server.onrender.com/inventario-json",
+    "https://inv-mixquiahuala-server.onrender.com/inventario-json"
 ];
 
 let inventario = [];
@@ -139,7 +139,7 @@ async function cargarInventarios(){
     }
 
     poblarSelectorAgencias();
-    mostrarResultados(inventario);
+    filtrarTodo();
     mostrarMensaje("Inventarios cargados correctamente.");
 }
 
@@ -181,34 +181,52 @@ function mostrarResultados(datos){
     });
 }
 
-/* ================= BUSCAR POR TEXTO ================= */
-function filtrarBusqueda(){
+/* ================= FILTRADO COMBINADO ================= */
+function filtrarTodo(){
     const txt = document.getElementById("busqueda").value.toLowerCase();
+    const agencia = document.getElementById("selectAgencia").value;
 
     const filtrado = inventario.filter(x =>
-        (x.codigo || "").toLowerCase().includes(txt) ||
-        (x.descripcion || "").toLowerCase().includes(txt)
+        (!agencia || x.agencia === agencia) &&
+        ((x.codigo || "").toLowerCase().includes(txt) ||
+         (x.descripcion || "").toLowerCase().includes(txt))
     );
 
     mostrarResultados(filtrado);
 }
 
-/* ================= FILTRAR POR AGENCIA ================= */
+/* ================= FILTRAR SOLO AGENCIA ================= */
 function filtrarAgencia(){
     const agencia = document.getElementById("selectAgencia").value;
 
     if(!agencia){
-        mostrarResultados(inventario);
+        filtrarTodo();
         return;
     }
 
-    mostrarResultados(inventario.filter(x => x.agencia === agencia));
+    const txt = document.getElementById("busqueda").value.toLowerCase();
+    const filtrado = inventario.filter(x =>
+        x.agencia === agencia &&
+        ((x.codigo || "").toLowerCase().includes(txt) ||
+         (x.descripcion || "").toLowerCase().includes(txt))
+    );
+
+    mostrarResultados(filtrado);
 }
 
 /* ================= EXPORTAR ================= */
 function exportarInventario(){
+    const txt = document.getElementById("busqueda").value.toLowerCase();
+    const agencia = document.getElementById("selectAgencia").value;
+
+    const filtrado = inventario.filter(x =>
+        (!agencia || x.agencia === agencia) &&
+        ((x.codigo || "").toLowerCase().includes(txt) ||
+         (x.descripcion || "").toLowerCase().includes(txt))
+    );
+
     let csv = "Agencia,Código,Descripción,Stock\n";
-    inventario.forEach(x=>{
+    filtrado.forEach(x=>{
         csv += `"${x.agencia}","${x.codigo}","${x.descripcion}","${x.stock}"\n`;
     });
 
@@ -217,7 +235,7 @@ function exportarInventario(){
 
     const a = document.createElement("a");
     a.href = url;
-    a.download = "inventario_completo.csv";
+    a.download = "inventario_filtrado.csv";
     a.click();
 }
 
