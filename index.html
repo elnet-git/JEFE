@@ -124,31 +124,33 @@ const URLS = [
 
 let inventario = [];
 
-/* ================= CARGAR INVENTARIOS ================= */
+/* ================= CARGAR INVENTARIOS SIMULTÁNEAMENTE ================= */
 async function cargarInventarios(){
     mostrarMensaje("Cargando inventarios...");
-    inventario = [];
 
-    for(const url of URLS){
+    const fetches = URLS.map(async url => {
         try{
             const r = await fetch(url);
             if(r.ok){
                 const datos = await r.json();
                 const nombreAgencia = url.replace("https://", "").split(".")[0];
 
-                inventario.push(
-                    ...datos.map(x=>({
-                        ...x,
-                        agencia: x.agencia || nombreAgencia
-                    }))
-                );
+                return datos.map(x => ({
+                    ...x,
+                    agencia: x.agencia && x.agencia.trim() !== "" ? x.agencia : nombreAgencia
+                }));
             } else {
                 console.warn("Error en:", url);
+                return [];
             }
         }catch(e){
             console.warn("No respondió:", url);
+            return [];
         }
-    }
+    });
+
+    const resultados = await Promise.all(fetches);
+    inventario = resultados.flat(); // combinamos todos los arrays
 
     poblarSelectorAgencias();
     crearBotonesAgencias();
