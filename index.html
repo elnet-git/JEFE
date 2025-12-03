@@ -39,20 +39,32 @@ h2 {
     border:none; font-weight:600; transition:0.3s;
 }
 .controls button:hover { background:var(--azul-osc); }
+
 #mensaje {
-    text-align:center; font-weight:600; color:#b00; margin-bottom:16px;
+    text-align:center;
+    font-weight:600;
+    color:#b00;
+    margin-bottom:16px;
 }
+
 .scroll-box {
-    width: 100%; max-height: 550px; overflow-y:auto;
-    border-radius:10px; box-shadow:0 2px 8px rgba(0,0,0,0.12);
+    width: 100%;
+    max-height: 550px;
+    overflow-y:auto;
+    border-radius:10px;
+    box-shadow:0 2px 8px rgba(0,0,0,0.12);
     background:var(--card);
 }
+
 table {
-    width:100%; border-collapse:collapse;
+    width:100%;
+    border-collapse:collapse;
 }
 thead th {
-    position:sticky; top:0; background:var(--azul); color:white;
-    padding:12px; font-size:13px; text-transform:uppercase; text-align:center;
+    position:sticky; top:0;
+    background:var(--azul); color:white;
+    padding:12px; font-size:13px; text-transform:uppercase;
+    text-align:center;
 }
 tbody td {
     padding:10px; font-size:14px; border-bottom:1px solid var(--gris-claro);
@@ -60,16 +72,21 @@ tbody td {
 }
 tbody tr:nth-child(even){ background:#fbfbfb; }
 tbody tr:hover { background:#e8f0ff; }
-@media(max-width:768px){ .controls { flex-direction:column; } }
+
+@media(max-width:768px){
+    .controls { flex-direction:column; }
+}
 </style>
 </head>
 <body>
 <div class="container">
     <h2>Inventarios JQ Motors - Unificado</h2>
+
     <div id="mensaje">Cargando inventarios...</div>
 
     <div class="controls">
         <input id="busqueda" class="wide" type="text" placeholder="Buscar código o descripción..." onkeyup="filtrarTodo()">
+
         <select id="selectAgencia" style="max-width:250px;" onchange="filtrarAgencia()">
             <option value="">-- Todas las agencias --</option>
             <option value="matriz">Matriz</option>
@@ -79,6 +96,7 @@ tbody tr:hover { background:#e8f0ff; }
             <option value="pachuca">Pachuca</option>
             <option value="mixquiahuala">Mixquiahuala</option>
         </select>
+
         <button onclick="exportarInventario()" style="max-width:180px;">Exportar CSV</button>
     </div>
 
@@ -98,14 +116,20 @@ tbody tr:hover { background:#e8f0ff; }
 </div>
 
 <script>
-const URLS = [
-    "https://inv-matriz-server.onrender.com/inventario-json",
-    "https://inv-impulsora-server.onrender.com/inventario-json",
-    "https://inv-tultitlan-server.onrender.com/inventario-json",
-    "https://inv-ojo-de-agua-server.onrender.com/inventario-json",
-    "https://inv-pachuca-server.onrender.com/inventario-json",
-    "https://inv-mixquiahuala-server.onrender.com/inventario-json"
-];
+/* ================= AGENCIAS Y URLS ================= */
+const AGENCIAS = {
+    "matriz": "https://inv-matriz-server.onrender.com/inventario-json",
+    "impulsora": "https://inv-impulsora-server.onrender.com/inventario-json",
+    "tultitlan": "https://inv-tultitlan-server.onrender.com/inventario-json",
+    "ojo_de_agua": "https://inv-ojo-de-agua-server.onrender.com/inventario-json",
+    "pachuca": "https://inv-pachuca-server.onrender.com/inventario-json",
+    "mixquiahuala": "https://inv-mixquiahuala-server.onrender.com/inventario-json"
+};
+
+const URLS = Object.values(AGENCIAS);
+const MAPA_URL_A_NOMBRE = Object.fromEntries(
+    Object.entries(AGENCIAS).map(([k,v])=>[v,k])
+);
 
 let inventario = [];
 
@@ -118,13 +142,21 @@ async function cargarInventarios(){
             const r = await fetch(url);
             if(r.ok){
                 const datos = await r.json();
-                const nombreAgencia = url.replace("https://inv-", "").split("-server")[0]; // Normaliza el nombre
+
+                const nombre = MAPA_URL_A_NOMBRE[url];
+
                 const procesados = datos.map(x => ({
                     ...x,
-                    agencia: x.agencia && x.agencia.trim() !== "" ? x.agencia.toLowerCase() : nombreAgencia
+                    agencia:
+                        (x.agencia || nombre)
+                            .toLowerCase()
+                            .replace(/ /g, "_")
+                            .replace(/-/g, "_")
                 }));
-                console.log(`Agencia ${nombreAgencia}: ${procesados.length} productos cargados`);
+
+                console.log(`Agencia ${nombre}: ${procesados.length} productos cargados`);
                 return procesados;
+
             } else {
                 console.warn("Error en:", url);
                 return [];
@@ -136,9 +168,11 @@ async function cargarInventarios(){
     });
 
     const resultados = await Promise.all(fetches);
+
     resultados.forEach(datos => {
         datos.forEach(item => {
-            if(!inventario.some(x => x.agencia === item.agencia && x.codigo === item.codigo)){
+            const key = item.agencia + "|" + item.codigo;
+            if(!inventario.some(x => (x.agencia + "|" + x.codigo) === key)){
                 inventario.push(item);
             }
         });
@@ -152,14 +186,17 @@ async function cargarInventarios(){
 function mostrarResultados(datos){
     const tb = document.getElementById("resultados");
     tb.innerHTML = "";
+
     if(datos.length === 0){
         tb.innerHTML = "<tr><td colspan='4'>No hay datos</td></tr>";
         return;
     }
+
     datos.sort((a,b)=> a.agencia.localeCompare(b.agencia));
+
     datos.forEach(item=>{
         const tr = document.createElement("tr");
-        tr.innerHTML = `
+        tr.innerinnerHTML = `
             <td>${item.agencia}</td>
             <td>${item.codigo}</td>
             <td style="text-align:left">${item.descripcion}</td>
@@ -172,27 +209,40 @@ function mostrarResultados(datos){
 /* ================= FILTRADO ================= */
 function filtrarTodo(){
     const txt = document.getElementById("busqueda").value.toLowerCase();
-    const agencia = document.getElementById("selectAgencia").value;
+
+    let agencia = document.getElementById("selectAgencia").value;
+    agencia = agencia.replace(/-/g, "_");
+
     const filtrado = inventario.filter(x =>
         (!agencia || x.agencia === agencia) &&
-        ((x.codigo||"").toLowerCase().includes(txt) || (x.descripcion||"").toLowerCase().includes(txt))
+        ((x.codigo||"").toLowerCase().includes(txt) ||
+         (x.descripcion||"").toLowerCase().includes(txt))
     );
     mostrarResultados(filtrado);
 }
-function filtrarAgencia(){ filtrarTodo(); }
+
+function filtrarAgencia(){
+    filtrarTodo();
+}
 
 /* ================= EXPORTAR ================= */
 function exportarInventario(){
     const txt = document.getElementById("busqueda").value.toLowerCase();
-    const agencia = document.getElementById("selectAgencia").value;
+
+    let agencia = document.getElementById("selectAgencia").value;
+    agencia = agencia.replace(/-/g, "_");
+
     const filtrado = inventario.filter(x =>
         (!agencia || x.agencia === agencia) &&
-        ((x.codigo||"").toLowerCase().includes(txt) || (x.descripcion||"").toLowerCase().includes(txt))
+        ((x.codigo||"").toLowerCase().includes(txt) ||
+         (x.descripcion||"").toLowerCase().includes(txt))
     );
+
     let csv = "Agencia,Código,Descripción,Stock\n";
     filtrado.forEach(x=>{
         csv += `"${x.agencia}","${x.codigo}","${x.descripcion}","${x.stock}"\n`;
     });
+
     const blob = new Blob([csv], {type:"text/csv"});
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -202,10 +252,13 @@ function exportarInventario(){
 }
 
 /* ================= UTIL ================= */
-function mostrarMensaje(t){ document.getElementById("mensaje").textContent = t; }
+function mostrarMensaje(t){
+    document.getElementById("mensaje").textContent = t;
+}
 
 /* ================= INICIO ================= */
 cargarInventarios();
 </script>
+
 </body>
 </html>
