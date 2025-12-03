@@ -24,8 +24,6 @@ h2 {
 .container {
     max-width:1200px; margin:0 auto; padding:20px;
 }
-
-/* Controles */
 .controls {
     display:flex; flex-wrap:wrap; gap:10px;
     justify-content:center; margin-bottom:10px;
@@ -41,8 +39,6 @@ h2 {
     border:none; font-weight:600; transition:0.3s;
 }
 .controls button:hover { background:var(--azul-osc); }
-
-/* Panel botones agencias */
 #panelAgencias button {
     padding:6px 10px; border-radius:4px;
     border:none; background:var(--azul); color:white; cursor:pointer;
@@ -50,13 +46,9 @@ h2 {
     transition:0.3s;
 }
 #panelAgencias button:hover { background:var(--azul-osc); }
-
-/* Mensaje */
 #mensaje {
     text-align:center; font-weight:600; color:#b00; margin-bottom:16px;
 }
-
-/* Tabla */
 .scroll-box {
     width: 100%; max-height: 550px; overflow-y:auto;
     border-radius:10px; box-shadow:0 2px 8px rgba(0,0,0,0.12);
@@ -75,10 +67,7 @@ tbody td {
 }
 tbody tr:nth-child(even){ background:#fbfbfb; }
 tbody tr:hover { background:#e8f0ff; }
-
-@media(max-width:768px){
-    .controls { flex-direction:column; }
-}
+@media(max-width:768px){ .controls { flex-direction:column; } }
 </style>
 </head>
 <body>
@@ -93,7 +82,6 @@ tbody tr:hover { background:#e8f0ff; }
         <button onclick="exportarInventario()" style="max-width:180px;">Exportar CSV</button>
     </div>
 
-    <!-- Panel de botones por agencia -->
     <div id="panelAgencias"></div>
 
     <div class="scroll-box">
@@ -112,7 +100,6 @@ tbody tr:hover { background:#e8f0ff; }
 </div>
 
 <script>
-/* ================= URLs AGENCIAS ================= */
 const URLS = [
     "https://inv-matriz-server.onrender.com/inventario-json",
     "https://inv-impulsora-server.onrender.com/inventario-json",
@@ -124,7 +111,7 @@ const URLS = [
 
 let inventario = [];
 
-/* ================= CARGAR INVENTARIOS SIMULTÁNEAMENTE ================= */
+/* ================= CARGAR INVENTARIOS SIN REPETIR ================= */
 async function cargarInventarios(){
     mostrarMensaje("Cargando inventarios...");
 
@@ -134,11 +121,12 @@ async function cargarInventarios(){
             if(r.ok){
                 const datos = await r.json();
                 const nombreAgencia = url.replace("https://", "").split(".")[0];
-
-                return datos.map(x => ({
+                const procesados = datos.map(x => ({
                     ...x,
                     agencia: x.agencia && x.agencia.trim() !== "" ? x.agencia : nombreAgencia
                 }));
+                console.log(`Agencia ${nombreAgencia}: ${procesados.length} productos cargados`);
+                return procesados;
             } else {
                 console.warn("Error en:", url);
                 return [];
@@ -150,7 +138,14 @@ async function cargarInventarios(){
     });
 
     const resultados = await Promise.all(fetches);
-    inventario = resultados.flat(); // combinamos todos los arrays
+    resultados.forEach(datos => {
+        datos.forEach(item => {
+            // Evitar duplicados de la misma agencia y código
+            if(!inventario.some(x => x.agencia === item.agencia && x.codigo === item.codigo)){
+                inventario.push(item);
+            }
+        });
+    });
 
     poblarSelectorAgencias();
     crearBotonesAgencias();
@@ -162,7 +157,6 @@ async function cargarInventarios(){
 function poblarSelectorAgencias(){
     const sel = document.getElementById("selectAgencia");
     sel.innerHTML = '<option value="">-- Todas las agencias --</option>';
-
     const agencias = [...new Set(inventario.map(x=>x.agencia))].sort();
     agencias.forEach(a=>{
         const op = document.createElement("option");
@@ -176,14 +170,11 @@ function poblarSelectorAgencias(){
 function mostrarResultados(datos){
     const tb = document.getElementById("resultados");
     tb.innerHTML = "";
-
     if(datos.length === 0){
         tb.innerHTML = "<tr><td colspan='4'>No hay datos</td></tr>";
         return;
     }
-
     datos.sort((a,b)=> a.agencia.localeCompare(b.agencia));
-
     datos.forEach(item=>{
         const tr = document.createElement("tr");
         tr.innerHTML = `
@@ -196,92 +187,58 @@ function mostrarResultados(datos){
     });
 }
 
-/* ================= FILTRADO COMBINADO ================= */
+/* ================= FILTRADO ================= */
 function filtrarTodo(){
     const txt = document.getElementById("busqueda").value.toLowerCase();
     const agencia = document.getElementById("selectAgencia").value;
-
     const filtrado = inventario.filter(x =>
         (!agencia || x.agencia === agencia) &&
-        ((x.codigo || "").toLowerCase().includes(txt) ||
-         (x.descripcion || "").toLowerCase().includes(txt))
+        ((x.codigo||"").toLowerCase().includes(txt) || (x.descripcion||"").toLowerCase().includes(txt))
     );
-
     mostrarResultados(filtrado);
 }
+function filtrarAgencia(){ filtrarTodo(); }
 
-/* ================= FILTRAR SOLO AGENCIA ================= */
-function filtrarAgencia(){
-    const agencia = document.getElementById("selectAgencia").value;
-
-    if(!agencia){
-        filtrarTodo();
-        return;
-    }
-
-    const txt = document.getElementById("busqueda").value.toLowerCase();
-    const filtrado = inventario.filter(x =>
-        x.agencia === agencia &&
-        ((x.codigo || "").toLowerCase().includes(txt) ||
-         (x.descripcion || "").toLowerCase().includes(txt))
-    );
-
-    mostrarResultados(filtrado);
-}
-
-/* ================= BOTONES POR AGENCIA ================= */
+/* ================= BOTONES AGENCIAS ================= */
 function crearBotonesAgencias(){
     const panel = document.getElementById("panelAgencias");
     panel.innerHTML = "";
-
     const agencias = [...new Set(inventario.map(x=>x.agencia))].sort();
 
-    // Botón para todas
     const btnAll = document.createElement("button");
     btnAll.textContent = "Todas las agencias";
     btnAll.onclick = () => filtrarTodo();
     panel.appendChild(btnAll);
 
-    // Botones individuales
     agencias.forEach(a=>{
         const btn = document.createElement("button");
         btn.textContent = a.toUpperCase();
-        btn.onclick = () => filtrarPorBoton(a);
+        btn.onclick = () => {
+            const txt = document.getElementById("busqueda").value.toLowerCase();
+            const filtrado = inventario.filter(x =>
+                x.agencia === a &&
+                ((x.codigo||"").toLowerCase().includes(txt) || (x.descripcion||"").toLowerCase().includes(txt))
+            );
+            mostrarResultados(filtrado);
+        };
         panel.appendChild(btn);
     });
-}
-
-function filtrarPorBoton(agencia){
-    const txt = document.getElementById("busqueda").value.toLowerCase();
-
-    const filtrado = inventario.filter(x =>
-        x.agencia === agencia &&
-        ((x.codigo || "").toLowerCase().includes(txt) ||
-         (x.descripcion || "").toLowerCase().includes(txt))
-    );
-
-    mostrarResultados(filtrado);
 }
 
 /* ================= EXPORTAR ================= */
 function exportarInventario(){
     const txt = document.getElementById("busqueda").value.toLowerCase();
     const agencia = document.getElementById("selectAgencia").value;
-
     const filtrado = inventario.filter(x =>
         (!agencia || x.agencia === agencia) &&
-        ((x.codigo || "").toLowerCase().includes(txt) ||
-         (x.descripcion || "").toLowerCase().includes(txt))
+        ((x.codigo||"").toLowerCase().includes(txt) || (x.descripcion||"").toLowerCase().includes(txt))
     );
-
     let csv = "Agencia,Código,Descripción,Stock\n";
     filtrado.forEach(x=>{
         csv += `"${x.agencia}","${x.codigo}","${x.descripcion}","${x.stock}"\n`;
     });
-
     const blob = new Blob([csv], {type:"text/csv"});
     const url = URL.createObjectURL(blob);
-
     const a = document.createElement("a");
     a.href = url;
     a.download = "inventario_filtrado.csv";
@@ -289,9 +246,7 @@ function exportarInventario(){
 }
 
 /* ================= UTIL ================= */
-function mostrarMensaje(t){
-    document.getElementById("mensaje").textContent = t;
-}
+function mostrarMensaje(t){ document.getElementById("mensaje").textContent = t; }
 
 /* ================= INICIO ================= */
 cargarInventarios();
