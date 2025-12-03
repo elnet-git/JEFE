@@ -92,7 +92,7 @@ tbody tr:hover { background:#e8f0ff; }
             <option value="matriz">Matriz</option>
             <option value="impulsora">Impulsora</option>
             <option value="tultitlan">Tultitlán</option>
-            <option value="ojo-de-agua">Ojo de Agua</option>
+            <option value="ojo_de_agua">Ojo de Agua</option>
             <option value="pachuca">Pachuca</option>
             <option value="mixquiahuala">Mixquiahuala</option>
         </select>
@@ -138,30 +138,27 @@ async function cargarInventarios(){
     mostrarMensaje("Cargando inventarios...");
 
     const fetches = URLS.map(async url => {
-        try{
+        try {
             const r = await fetch(url);
             if(r.ok){
                 const datos = await r.json();
-
                 const nombre = MAPA_URL_A_NOMBRE[url];
 
                 const procesados = datos.map(x => ({
                     ...x,
-                    agencia:
-                        (x.agencia || nombre)
-                            .toLowerCase()
-                            .replace(/ /g, "_")
-                            .replace(/-/g, "_")
+                    agencia: (x.agencia || nombre)
+                        .toLowerCase()
+                        .replace(/ /g, "_")
+                        .replace(/-/g, "_")
                 }));
 
                 console.log(`Agencia ${nombre}: ${procesados.length} productos cargados`);
                 return procesados;
-
             } else {
                 console.warn("Error en:", url);
                 return [];
             }
-        }catch(e){
+        } catch(e){
             console.warn("No respondió:", url);
             return [];
         }
@@ -169,6 +166,7 @@ async function cargarInventarios(){
 
     const resultados = await Promise.all(fetches);
 
+    // Evitar duplicados
     resultados.forEach(datos => {
         datos.forEach(item => {
             const key = item.agencia + "|" + item.codigo;
@@ -196,7 +194,7 @@ function mostrarResultados(datos){
 
     datos.forEach(item=>{
         const tr = document.createElement("tr");
-        tr.innerinnerHTML = `
+        tr.innerHTML = `
             <td>${item.agencia}</td>
             <td>${item.codigo}</td>
             <td style="text-align:left">${item.descripcion}</td>
@@ -209,15 +207,15 @@ function mostrarResultados(datos){
 /* ================= FILTRADO ================= */
 function filtrarTodo(){
     const txt = document.getElementById("busqueda").value.toLowerCase();
-
     let agencia = document.getElementById("selectAgencia").value;
     agencia = agencia.replace(/-/g, "_");
 
     const filtrado = inventario.filter(x =>
         (!agencia || x.agencia === agencia) &&
-        ((x.codigo||"").toLowerCase().includes(txt) ||
-         (x.descripcion||"").toLowerCase().includes(txt))
+        ((x.codigo || "").toLowerCase().includes(txt) ||
+         (x.descripcion || "").toLowerCase().includes(txt))
     );
+
     mostrarResultados(filtrado);
 }
 
@@ -228,14 +226,13 @@ function filtrarAgencia(){
 /* ================= EXPORTAR ================= */
 function exportarInventario(){
     const txt = document.getElementById("busqueda").value.toLowerCase();
-
     let agencia = document.getElementById("selectAgencia").value;
     agencia = agencia.replace(/-/g, "_");
 
     const filtrado = inventario.filter(x =>
         (!agencia || x.agencia === agencia) &&
-        ((x.codigo||"").toLowerCase().includes(txt) ||
-         (x.descripcion||"").toLowerCase().includes(txt))
+        ((x.codigo || "").toLowerCase().includes(txt) ||
+         (x.descripcion || "").toLowerCase().includes(txt))
     );
 
     let csv = "Agencia,Código,Descripción,Stock\n";
@@ -259,6 +256,5 @@ function mostrarMensaje(t){
 /* ================= INICIO ================= */
 cargarInventarios();
 </script>
-
 </body>
 </html>
