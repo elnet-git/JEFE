@@ -116,7 +116,7 @@ tbody tr:hover { background:#e8f0ff; }
 </div>
 
 <script>
-/* ================= AGENCIAS Y URLS ================= */
+/* ================= CONFIG ================= */
 const AGENCIAS = {
     "matriz": "https://inv-matriz-server.onrender.com/inventario-json",
     "impulsora": "https://inv-impulsora-server.onrender.com/inventario-json",
@@ -125,12 +125,8 @@ const AGENCIAS = {
     "pachuca": "https://inv-pachuca-server.onrender.com/inventario-json",
     "mixquiahuala": "https://inv-mixquiahuala-server.onrender.com/inventario-json"
 };
-
 const URLS = Object.values(AGENCIAS);
-const MAPA_URL_A_NOMBRE = Object.fromEntries(
-    Object.entries(AGENCIAS).map(([k,v])=>[v,k])
-);
-
+const MAPA_URL_A_NOMBRE = Object.fromEntries(Object.entries(AGENCIAS).map(([k,v])=>[v,k]));
 const NOMBRES_AMIGABLES = {
     "matriz":"Matriz",
     "impulsora":"Impulsora",
@@ -142,9 +138,22 @@ const NOMBRES_AMIGABLES = {
 
 let inventario = [];
 
+/* ================= UTIL ================= */
+function mostrarMensaje(t){
+    document.getElementById("mensaje").textContent = t;
+}
+
 /* ================= CARGAR INVENTARIOS ================= */
 async function cargarInventarios(){
     mostrarMensaje("Cargando inventarios...");
+
+    // Cargar inventario guardado en localStorage
+    const guardado = localStorage.getItem("inventario");
+    if(guardado){
+        inventario = JSON.parse(guardado);
+        filtrarTodo();
+        mostrarMensaje("Mostrando inventario guardado...");
+    }
 
     const fetches = URLS.map(async url => {
         try{
@@ -154,10 +163,7 @@ async function cargarInventarios(){
                 const nombre = MAPA_URL_A_NOMBRE[url];
                 const procesados = datos.map(x => ({
                     ...x,
-                    agencia: (x.agencia || nombre)
-                        .toLowerCase()
-                        .replace(/ /g, "_")
-                        .replace(/-/g, "_")
+                    agencia: (x.agencia || nombre).toLowerCase().replace(/ /g, "_").replace(/-/g, "_")
                 }));
                 console.log(`Agencia ${nombre}: ${procesados.length} productos cargados`);
                 return procesados;
@@ -173,14 +179,25 @@ async function cargarInventarios(){
 
     const resultados = await Promise.all(fetches);
 
+    // Combinar inventario nuevo con el guardado, evitando duplicados
     resultados.forEach(datos => {
         datos.forEach(item => {
             const key = item.agencia + "|" + item.codigo;
-            if(!inventario.some(x => (x.agencia + "|" + x.codigo) === key)){
+            const indexExistente = inventario.findIndex(x => (x.agencia + "|" + x.codigo) === key);
+            if(indexExistente === -1){
                 inventario.push(item);
+            } else {
+                // Si el stock cambió, actualizar
+                if(inventario[indexExistente].stock !== item.stock ||
+                   inventario[indexExistente].descripcion !== item.descripcion){
+                    inventario[indexExistente] = item;
+                }
             }
         });
     });
+
+    // Guardar inventario actualizado en localStorage
+    localStorage.setItem("inventario", JSON.stringify(inventario));
 
     filtrarTodo();
     mostrarMensaje("Inventarios cargados correctamente.");
@@ -253,14 +270,8 @@ function exportarInventario(){
     a.click();
 }
 
-/* ================= UTIL ================= */
-function mostrarMensaje(t){
-    document.getElementById("mensaje").textContent = t;
-}
-
 /* ================= INICIO ================= */
 cargarInventarios();
 </script>
-
 </body>
 </html>
